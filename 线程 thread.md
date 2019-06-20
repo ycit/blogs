@@ -82,6 +82,22 @@ public class ThreadTest {
 - 指定时间的等待状态 timed_waiting：Object 的 wait(time)，Thread.join(time)，LockSupport.parkNanos
 - 消亡状态 terminated
 
+### 线程安全
+
+各种操作共享的数据可以分为：
+
+1. 不可变：不可变对象一定是线程安全的；如果共享数据是一个基本数据类型，final 修饰就可以保证是不可变的；如果是一个对象，必须保证行为不会对其状态产生任何影响。如 String ,Integer
+2. 绝对线程安全
+3. 相对线程安全: Vector ,HashTable 等
+4. 线程兼容
+5. 线程对立：无论如何都无法保证线程安全
+
+### 线程安全的实现方法
+
+- 互斥同步：互斥是因，同步是果，临界区、互斥量和信号量 是实现互斥的实现方式
+
+  > synchronized 关键字修饰，synchronized 关键字经过编译之后，会在同步块的前后分别形成 monitorenter 和 monitorexit 这两个字节码指令，这两个字节码都需要一个 reference 类型的参数来指明要锁定和解锁的对象
+
 ### wait 和 sleep 的区别
 
 - wait 是 Object 类中的方法，是非静态方法；sleep 是在当前线程上操作并且方法是定义在 Thread 类中，是静态方法。
@@ -144,14 +160,31 @@ Executors 工具类提供了几种线程池的创建：
   >                               new SynchronousQueue<Runnable>())
   > ```
 
-- Executors.newScheduledThreadPool(int corePoolSize)
+- Executors.newScheduledThreadPool(int corePoolSize)：定时任务线程池
 
   > ```java
   > super(corePoolSize, Integer.MAX_VALUE, 0, NANOSECONDS,
   >       new DelayedWorkQueue())
   > ```
 
-  
+
+####　ctl
+
+> 线程池用于控制状态的属性，是 Integer 的原子操作类，32位；自身携带两个字段的信息
+>
+> workerCount: 有效线程数； 最大可存储 2^29-1 个线程，即存储在低 28位中
+>
+> runState: 运行状态，存储在高位中
+>
+> > Running: 接收新任务，处理队列中的任务； -1 >> 29
+> >
+> > shutdown: 不接收新任务，处理队列中的任务；0>>29
+> >
+> > stop: 不接收新任务，不处理队列中的任务；1>>29
+> >
+> > tidying（整理）: 所有的任务都终止了，workerCount 为0，所有线程为整理状态，将运行终止的hook 方法；2>>29
+> >
+> > terminated:  terminated() 方法已经完成；3>>29
 
 ### 死锁
 
