@@ -1,12 +1,50 @@
-## java基础篇、面试篇— HashMap引发的各种面试惨案
 
-> HashMap作为Java中对哈希表的实现，历来受到面试的各种青睐，抱着时刻为面试做准备的心态，今天就来总结一下各种面试惨案，并对其解答，以储备知识库。基于JDK8
-> 
+
+# Collection
+
+
+
+## List
+
+> 有序的集合
+
+- ArrayList
+
+  > 基于数组的实现，非线程安全的。有角标，查询速度快，可以包含 null 值，插入有序
+  >
+  > 默认容量：10
+  >
+  > Vector 是线程安全的，其他和 ArrayList 一致。 
+
+- LinkedList
+
+  > 基于双向链接列表的实现，非线程安全。新增，删除速度比较快，不需要重排序，可以包含null 值，插入有序。
+
+## Set
+
+> 不包含重复元素的集合
+
+- HashSet
+
+  > 基于 哈希表的实现，内部实际上是 HashMap 实现，value 为 static final 修饰的 常量 Object 实例。因为HashMap在 remove 时会返回 value ,然后需要通过比较 value 来判断是否移除成功。插入无序，按 key 的 哈希码排序
+  >
+  > 默认容量：HashMap 的 16
+
+- LinkedHashSet
+
+  > 基于哈希表和链接列表的实现，插入有序
+
+# Map
+
+
+
+## HashMap
+
 ### HashMap简介
 HashMap 是基于**Map**接口的**哈希表**的实现，内部是数组+链表+红黑树的数据结构，当桶的长度 \> 8 时转为红黑树，当桶的长度 \< 7 时转为链表。HashMap 支持 **null**的键和**null**的值。是线程不安全的。不保证插入顺序。
 Hashtable 也是基于**Map**接口的哈希表的实现。但是不支持**null**的键和**null**的值。是线程安全的。其他基本和 HashMap 相同。
 
-### 数组的扩容
+### HashMap数组的扩容
 
 - 扩容时机
 
