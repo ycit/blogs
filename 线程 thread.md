@@ -82,16 +82,6 @@ public class ThreadTest {
 - 指定时间的等待状态 timed_waiting：Object 的 wait(time)，Thread.join(time)，LockSupport.parkNanos
 - 消亡状态 terminated
 
-### 线程安全
-
-各种操作共享的数据可以分为：
-
-1. 不可变：不可变对象一定是线程安全的；如果共享数据是一个基本数据类型，final 修饰就可以保证是不可变的；如果是一个对象，必须保证行为不会对其状态产生任何影响。如 String ,Integer
-2. 绝对线程安全
-3. 相对线程安全: Vector ,HashTable 等
-4. 线程兼容
-5. 线程对立：无论如何都无法保证线程安全
-
 ### 线程安全的实现方法
 
 - 互斥同步（悲观锁）：互斥是因，同步是果，临界区、互斥量和信号量 是实现互斥的实现方式
@@ -176,7 +166,7 @@ jdk1.5 到 jdk1.6 对锁的优化，包括：
 
 - maximumPoolSize：线程池中允许的最大线程数；
 
-- keepAliveTime：当线程数大于大于核心线程数时，空闲线程等待时间超过该设置时间将时将被终止；
+- keepAliveTime：当线程数大于核心线程数时，空闲线程等待时间超过该设置时间将时将被终止；
 
 - TimeUnit：时间单位
 
@@ -187,6 +177,12 @@ jdk1.5 到 jdk1.6 对锁的优化，包括：
   > LinkedBlockingQueue：基于 链表实现的 先入先出的 阻塞队列
   >
   > SynchronousQueue：该阻塞队列没有内部容量
+
+  |             | *Throws exception*                                           | *返回特殊的值*                                               | *Blocks*                                                     | *Times out*                                                  |
+  | ----------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+  | **Insert**  | [`add(e)`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#add-E-) | [`offer(e)`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#offer-E-) | [`put(e)`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#put-E-) | [`offer(e, time, unit)`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#offer-E-long-java.util.concurrent.TimeUnit-) |
+  | **Remove**  | [`remove()`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#remove-java.lang.Object-) | [`poll()`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#poll-long-java.util.concurrent.TimeUnit-) | [`take()`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#take--) | [`poll(time, unit)`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#poll-long-java.util.concurrent.TimeUnit-) |
+  | **Examine** | [`element()`](https://docs.oracle.com/javase/8/docs/api/java/util/Queue.html#element--) | [`peek()`](https://docs.oracle.com/javase/8/docs/api/java/util/Queue.html#peek--) | *not applicable*                                             | *not applicable*                                             |
 
 - ThreadFactory：线程工厂，主要用来创建线程
 
@@ -199,7 +195,7 @@ jdk1.5 到 jdk1.6 对锁的优化，包括：
 
 Executors 工具类提供了几种线程池的创建：
 
-- Executors .newFixedThreadPool(int nThreads)：固定线程数
+- Executors .newFixedThreadPool(int nThreads)：固定大小的线程池
 
   > ```java 
   > new ThreadPoolExecutor(nThreads, nThreads,
@@ -216,7 +212,7 @@ Executors 工具类提供了几种线程池的创建：
   >                             new LinkedBlockingQueue<Runnable>())
   > ```
 
-- Executors.newCachedThreadPool()：核心线程数为0，最大线程数为无穷大
+- Executors.newCachedThreadPool()：核心线程数为0，最大线程数为无穷大；无边界线程池
 
   > ```java
   > new ThreadPoolExecutor(0, Integer.MAX_VALUE,
@@ -231,24 +227,115 @@ Executors 工具类提供了几种线程池的创建：
   >       new DelayedWorkQueue())
   > ```
 
+### 线程池源码解读
+
+ThreadPoolExecutor 类自顶向下的继承关系: j.u.c 包
+
+```json
+Executor:顶层接口，抽象了 execute(Runnable) 方法
+ExecutorService: 提供了管理线程终止的方法,以及返回Future(便于异步任务跟踪)的方法
+AbstractExecutorService:提供了几个方法默认实现类的抽象类
+ThreadPoolExecutor:使用线程池来执行提交的任务
+```
+
+ThreadPoolExecutor 内部类 Worker  自顶向下的继承关系:  j.u.c.locks 包
+
+```java
+AbstractOwnableSynchronizer: 可以被线程独占的同步器
+AbstractQueuedSynchronizer: AQS 提供一个框架，用于实现依赖先进先出（fifo）等待队列的阻塞锁和相关同步器（信号量、事件等）,内部使用 CLH 锁队列实现，是一种自旋锁。
+Worker:同时实现了 Runnable,
+```
+
+> CAPACITY = (1 << 29) - 1  即 高3位为0，低 29位为1
 
 ####　ctl
 
-> 线程池用于控制状态的属性，是 Integer 的原子操作类，32位；自身携带两个字段的信息
+> 线程池用于控制状态的属性，是 Integer 的原子操作类，32位；自身携带以下两个字段的信息：
 >
-> workerCount: 有效线程数； 最大可存储 2^29-1 个线程，即存储在低 28位中
+> workerCount: 有效线程数； 最大可存储 2^29-1 个线程，即存储在低 29位中
 >
-> runState: 运行状态，存储在高位中
+> ​       workerCount  获取： c & CAPACITY  逻辑与后即只保留低29位
 >
-> > Running: 接收新任务，处理队列中的任务； -1 >> 29
-> >
-> > shutdown: 不接收新任务，处理队列中的任务；0>>29
-> >
-> > stop: 不接收新任务，不处理队列中的任务；1>>29
-> >
-> > tidying（整理）: 所有的任务都终止了，workerCount 为0，所有线程为整理状态，将运行终止的hook 方法；2>>29
-> >
-> > terminated:  terminated() 方法已经完成；3>>29
+> runState: 运行状态，存储在高3位中
+>
+> 有以下几种状态
+>
+> - Running: 接收新任务，同时处理队列中的任务； -1 << 29 ：即高3位为1，低29位为0
+>
+> - shutdown: 不接收新任务，处理队列中的任务；0<<29：即高3位为0，低29位为0
+>
+> - stop: 不接收新任务，不处理队列中的任务；1<<29：即高3位为001，低29位为0
+>
+> - tidying（整理）: 所有的任务都终止了，workerCount 为0，所有线程为整理状态，将运行终止的hook 方法；2<<29：即高3位为010，低29位为0
+>
+> - terminated:  terminated() 方法已经完成；3<<29：即高3位为011，低29位为0
+>
+>    大小关系为 RUNNING<SHUTDOWN<STOP<TIDYING<TERMINATED
+>
+> ​    runState 获取：c & ~CAPACITY   ；~CAPACITY 即 高3位为1，低29位为0，逻辑与后只保留高3位的状态
+
+-1,0,1,2,3 对应的二进制表示
+
+![-1,0,1,2,3 二进制表示](D:\study\blogs\images\threadpoolexecutorctl.webp)
+
+左移29位后的二进制表示
+
+![](D:\study\blogs\images\runstate2.webp)
+
+转为十进制后为
+
+```text
+RUNNING = -536870912
+SHUTDOWN = 0
+STOP = 536870912
+TIDYING = 1073741824
+TERMINATED = 1610612736
+```
+
+~CAPACITY 的二进制表示为
+
+```text
+CAPACITY = 00011111111111111111111111111111
+~CAPACITY = 11100000000000000000000000000000
+```
+
+
+
+execute 方法执行流程图：
+
+![执行流程图](D:\study\blogs\images\ThreadPoolEexcutor-execute.png)
+
+execute 方法执行逻辑：
+
+- 如果当前运行的线程数，少于 corePoolSize，则尝试创建一个新的线程（worker）来执行任务
+- 如果当前运行的线程数，大于或者等于 corePoolSize，但队列 workQueue 未满，则新添加的任务放到 workQueue 中
+- 如果当前运行的线程数，大于或者等于 corePoolSize，且队列 workQueue 已满，但线程池中的运行线程数少于 maximumPoolSize，则会创建新的线程来执行任务
+- 如果当前运行的线程数，大于或者等于 corePoolSize，且队列 workQueue已满，并且 运行的线程数 等于 maximumPoolSize，则使用 RejectExecutionHandler 来执行拒绝策略。
+
+BlockingQueue (阻塞队列)：
+
+> 是一种队列，在队列的基础上还增加了其他功能，如在检索元素时等待队列变为非空，在存储元素时等待队列中空间可用。 BlockingQueue 有四种形式处理不能立即满足操作的情形
+>
+> 1. 抛出异常
+> 2. 方法返回特殊值(null 或者 false)
+> 3. 无限期的阻塞当前线程直到操作成功
+> 4. 在给定的最大时间内等待，否则超时
+>
+> |             | Throws exception                                             | Special value                                                | Blocks                                                       | Times out                                                    |
+> | ----------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+> | **Insert**  | [`add(e)`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#add-E-) | [`offer(e)`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#offer-E-) | [`put(e)`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#put-E-) | [`offer(e, time, unit)`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#offer-E-long-java.util.concurrent.TimeUnit-) |
+> | **Remove**  | [`remove()`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#remove-java.lang.Object-) | [`poll()`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#poll-long-java.util.concurrent.TimeUnit-) | [`take()`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#take--) | [`poll(time, unit)`](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/BlockingQueue.html#poll-long-java.util.concurrent.TimeUnit-) |
+> | **Examine** | [`element()`](https://docs.oracle.com/javase/8/docs/api/java/util/Queue.html#element--) | [`peek()`](https://docs.oracle.com/javase/8/docs/api/java/util/Queue.html#peek--) | *not applicable*                                             | *not applicable*                                             |
+>
+> BlockingQueue 不支持 null 值，如果插入 null 值 会抛出异常；
+>
+> BlockingQueue 支持容量限制，当超过给定的容量，即时没有阻塞也不能插入任何元素；
+>
+> BlockingQueue 主要用于生产者-消费者队列；
+>
+> BlockingQueue 是线程安全的。所有的入队操作通过使用内部锁或者其他形式并发控制原子操作；
+>
+> BlockingQueue 本质上
 
 ### 死锁
 
@@ -295,9 +382,21 @@ jdk5之后被 ==volatile==修饰的共享变量，具备两层语义：
 
 ### JAVA 内存模型（JMM）
 
-定义程序中各个变量的访问规则
+站在程序员的视角，本质上可以理解为，==Java 内存模型规范了 JVM 如何提供按需禁用缓存和编译优化的方法。==具体来说，这些方法包括：
 
-决定在程序运行过程中什么值可以读取
+- volatile
+- synchronized
+- final
+- Happens-Before
+
+#### Happens-Before
+
+1. 程序的顺序性规则：指在一个线程中，按照程序顺序，前面的操作 Happens-Before 于后续的任意操作
+2. volatile 规则：指对一个 volatile 变量的写操作，Happens-Before 于后续对这个 volatile 变量的读操作
+3. 传递性：指如果 A Happens-Before B，且 B Happens-Before C，那么 A Happens-Before C
+4. 管程中锁的规则：对一个锁的解锁 Happens-Before 于后续对这个锁的加锁
+5. 线程 start() 规则：指主线程 A 启动子线程 B 后，子线程 B 能够看到主线程在启动子线程 B 前的操作
+6. 线程 join() 规则：指主线程 A 等待子线程 B 完成（主线程 A 通过调用子线程 B 的 join() 方法实现），当子线程 B 完成后（主线程 A 中 join() 方法返回），主线程能够看到子线程的操作。看到是指 对共享变量的操作。
 
 #### 主内存和工作内存
 
@@ -352,6 +451,22 @@ happens-before 规则：
 - 传递性：如果A happens-before B，且B happens-before C，那么A happens-before C。 
 - start()规则：如果线程A执行操作ThreadB.start()（启动线程B），那么A线程的ThreadB.start()操作happens-before于线程B中的任意操作。 
 - join()规则：如果线程A执行操作ThreadB.join()并成功返回，那么线程B中的任意操作happens-before于线程A从ThreadB.join()操作成功返回。
+
+
+
+## AQS
+
+> AQS 即 AbstractQueuedSynchronizer
+
+### java doc
+
+> AQS 提供了一个框架，这个框架实现了阻塞锁 和 依赖于先进先出(FIFO)等待队列的相关同步器(信号量，事件等)。
+>
+> 这个类被设计为有用的基础类，提供给依赖于通过单个原子 int 值来代表状态的大多数类型的同步器使用。子类必须定义 protected类型的 方法以便改变 state 值，
+>
+> AQS 类支持默认的排它模式和共享模式。以独占模式获取锁时，其他线程尝试获取锁是无法获取成功的。共享模式多线程获取锁时，	可能(但不需要)成功。
+>
+> AQS 定义了一个 ConditionObject 内部类
 
 
 
