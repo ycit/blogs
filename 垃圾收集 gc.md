@@ -93,6 +93,20 @@ Java 中，可以作为 GC Roots 对象：
 
   > 面向服务器端应用的垃圾收集器，并行与并发，分代收集，空间整合，可预测的停顿
 
+##### JDK 各个版本默认收集器
+
+- JDK1.7
+
+  > Parallel Scavenge (新生代) + Parallel Old(老年代)
+
+- JDK1.8
+
+  > Parallel Scavenge (新生代) + Parallel Old(老年代)
+
+- JDK1.9
+
+  > G1
+
 
 
 
