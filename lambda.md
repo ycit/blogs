@@ -32,3 +32,20 @@ void → T：不输入任何值，返回一个值
 T get();
 ```
 
+
+
+### Optional
+
+#### 错误使用
+
+1. 直接调用 isPresent 方法 : 和 非空判断无异
+2. 直接调用 get 方法：容易导致空指针异常
+3. Optional 类型作为类/实例属性
+4. Optional 类型作为方法参数
+
+#### 常用正确的方法
+
+1. Optional.of()
+2. Optional.ofNullable()
+3. Optional.empty()
+4. 

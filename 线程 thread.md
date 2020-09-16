@@ -75,12 +75,12 @@ public class ThreadTest {
 
 ### 线程状态
 
-- 新建状态 new：新创建的线程，还未执行 start 方法
-- 可运行状态 runnable：正在虚拟机中运行，已获取相关锁，但是可能正在等待来自操作系统的资源，如 CPU
-- 阻塞状态 blocked：正在等待监视器锁的线程。调用 Object 的 wait 方法，之后线程进入 等待状态，当其他线程中调用了 锁对象的 notify 方法 或者任意一个对象的 notifyAll 方法，则 线程苏醒，此时，若锁对象的锁正在被其他线程使用，则 线程处于 阻塞状态，否则进入 可运行状态，等待 操作系统资源
-- 等待状态 waiting： Object 的 wait()，Thread.join()，LockSupport.park()方法调用后，进入等待状态
-- 指定时间的等待状态 timed_waiting：Object 的 wait(time)，Thread.join(time)，LockSupport.parkNanos
-- 消亡状态 terminated
+- 新建状态 **new**：新创建的线程，还未执行 start 方法
+- 可运行状态 **runnable**：正在虚拟机中运行，已获取相关锁，但是可能正在等待来自操作系统的资源，如 CPU
+- 阻塞状态 **blocked**：正在等待监视器锁的线程。调用 Object 的 wait 方法，之后线程进入 等待状态，当其他线程中调用了 锁对象的 notify 方法 或者任意一个对象的 notifyAll 方法，则 线程苏醒，此时，若锁对象的锁正在被其他线程使用，则 线程处于 阻塞状态，否则进入 可运行状态，等待 操作系统资源
+- 等待状态 **waiting**： Object 的 wait()，Thread.join()，LockSupport.park()方法调用后，进入等待状态
+- 指定时间的等待状态 **timed_waiting**：Object 的 wait(time)，Thread.join(time)，LockSupport.parkNanos
+- 消亡状态 **terminated**
 
 ### 线程安全的实现方法
 
@@ -108,7 +108,7 @@ jdk1.5 到 jdk1.6 对锁的优化，包括：
 
 - 自适应性自旋
 
-  > jdk1.4 中实现了自旋锁，默认关闭；jdk1.6 实现了 适应性自旋锁，默认打开；
+  > jdk1.4 中实现了自旋锁，默认关闭；jdk1.6 实现了 自适应性自旋锁，默认打开；
   >
   > 自适应自旋：自旋时间不再固定，由前一次在同一个锁上的自旋时间及锁的拥有者的状态来决定
 
@@ -178,7 +178,7 @@ jdk1.5 到 jdk1.6 对锁的优化，包括：
   >
   > LinkedBlockingQueue：基于 链表实现的 先入先出的 阻塞队列
   >
-  > SynchronousQueue：该阻塞队列没有内部容量
+  > SynchronousQueue：该阻塞队列没有内部容量，实现了公平队列 和非公平队列（默认）
 
   |             | *Throws exception*                                           | *返回特殊的值*                                               | *Blocks*                                                     | *Times out*                                                  |
   | ----------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
@@ -331,7 +331,7 @@ BlockingQueue (阻塞队列)：
 >
 > BlockingQueue 不支持 null 值，如果插入 null 值 会抛出异常；
 >
-> BlockingQueue 支持容量限制，当超过给定的容量，即时没有阻塞也不能插入任何元素；
+> BlockingQueue 支持容量限制，当超过给定的容量，即使没有阻塞也不能插入任何元素；
 >
 > BlockingQueue 主要用于生产者-消费者队列；
 >
@@ -412,7 +412,7 @@ RAM-主内存，CPU高速缓存，CPU；
 
 被 volatile 关键字修饰的变量，所有写入到该变量的值会被立即写到主内存中，并且会使高速缓存中的变量值失效，线程读取这个变量时会直接从主内存中读取。
 
-[memory](file:///D:/study/blogs/java-volatile-1.png)
+![memory](images/java-volatile-1.png)
 
 线程1和线程2要想进行数据交换一般经历下面的步骤：
 
@@ -456,19 +456,133 @@ happens-before 规则：
 
 
 
+### ThreadLocal
+
+该类提供了线程 局部变量
+
+what
+
+> ThreadLocal 是一个数据结构， 有点像 HashMap, 可以存储 key value 键值对， 但是一个 ThreadLocal 只能保存一个键值对，并且各个线程的数据互不干扰。
+
+how
+
+> 每个线程都持有一个  ThreadLocalMap 数据结构， 其值是保存在当前线程的  threadLocals 变量中
+
+类关系
+
+> 每个 Thread 对象中都持有一个 ThreadLocalMap 的成员变量。每个 ThreadLocalMap 内部又维护了 N 个 Entry 节点， 也就是 Entry 数组，每个 Entry 代表一个完整的对象，key 是 ThreadLocal 本身，value 是 ThreadLocal 的泛型类型的值。
+
+#### ThreadLocalMap
+
+> 类似  hashMap , 存储 key  value ， 只不过 key 永远是  threadLocal ,  Entry 继承了 WeakReference, Entry 是一个数组，通过开放地址法的线性探测 解决 hash 冲突。
+>
+> 两种冲突类型：
+>
+> - ~~只有一个静态类型的 ThreadLocal 实例 ， 当向 threadLocal 中设置多个 值时产生的碰撞，通过 开放地址法的 线性探测解决~~
+> - ~~多个 ThreadLocal 实例，每个线程都构建一个 ThreadLocal 实例， 此时每创建一个ThreadLocal 其 hashcode 就会 累加 0x61c88647~~
+>
+> 每个ThreadLocal对象都有一个hash值`threadLocalHashCode`，每初始化一个ThreadLocal对象，hash值就增加一个固定的大小`0x61c88647` ，目的是 **为了让哈希码能均匀的分布在2的N次方的数组里**
+>
+> 在插入过程中，根据ThreadLocal对象的hash值，定位到table中的位置i，过程如下：
+> 1、如果当前位置是空的，那么正好，就初始化一个Entry对象放在位置i上；
+> 2、不巧，位置i已经有Entry对象了，如果这个Entry对象的key正好是即将设置的key，那么重新设置Entry中的value；
+> 3、很不巧，位置i的Entry对象，和即将设置的key没关系，那么只能找下一个空位置；
+>
+> 这样的话，在get的时候，也会根据ThreadLocal对象的hash值，定位到table中的位置，然后判断该位置Entry对象中的key是否和get的key一致，如果不一致，就判断下一个位置。
+>
+> 容易导致内存泄露
+>
+> private static final ThreadLocal<Integer> TL_INT = ThreadLocal.withInitial(() -> 6);
+>
+> 如果使用强引用，当ThreadLocal对象（假设为ThreadLocal@123456）的引用（即：TL_INT，是一个强引用，指向ThreadLocal@123456）被回收了，ThreadLocalMap本身依然还持有ThreadLocal@123456的强引用，如果没有手动删除这个key，则ThreadLocal@123456不会被回收，所以只要当前线程不消亡，ThreadLocalMap引用的那些对象就不会被回收，可以认为这导致Entry内存泄漏。
+>
+> 如果使用弱引用，那指向ThreadLocal@123456对象的引用就两个：TL_INT强引用，和ThreadLocalMap中Entry的弱引用。一旦TL_INT被回收，则指向ThreadLocal@123456的就只有弱引用了，在下次gc的时候，这个ThreadLocal@123456就会被回收。
+>
+> 那么问题来了，ThreadLocal@123456对象只是作为ThreadLocalMap的一个key而存在的，现在它被回收了，但是它对应的value并没有被回收，内存泄露依然存在！而且key被删了之后，变成了null，value更是无法被访问到了！针对这一问题，ThreadLocalMap类的设计本身已经有了这一问题的解决方案，那就是在每次get()/set()/remove()ThreadLocalMap中的值的时候，会自动清理key为null的value。如此一来，value也能被回收了。
+
 ## AQS
 
 > AQS 即 AbstractQueuedSynchronizer
 
 ### java doc
 
-> AQS 提供了一个框架，这个框架实现了阻塞锁 和 依赖于先进先出(FIFO)等待队列的相关同步器(信号量，事件等)。
+> AQS 提供了一种依赖于先进先出(FIFO)等待队列的同步器框架(信号量，事件等)。	
 >
-> 这个类被设计为有用的基础类，提供给依赖于通过单个原子 int 值来代表状态的大多数类型的同步器使用。子类必须定义 protected类型的 方法以便改变 state 值，
+> 该同步器利用一个 共享变量 state 来表示状态。子类通过继承同步器并实现它的方法来管理 state 状态，管理的方式是通过 acquire 和 release 的方式来操纵状态。子类推荐被定义为 自定义同步装备的内部类，同步器自身没有实现任务同步接口，仅仅是定义了若干个 acquire 之类的方法以供使用。该同步器既可以作为排它模式也可以作为共享模式。当它被定义为一个排它模式时，其他线程对其的获取就被阻止，而共享模式 对于多个线程获取都可以成功
 >
-> AQS 类支持默认的排它模式和共享模式。以独占模式获取锁时，其他线程尝试获取锁是无法获取成功的。共享模式多线程获取锁时，	可能(但不需要)成功。
+> ![](线程/AQS.png)
 >
-> AQS 定义了一个 ConditionObject 内部类
+> AQS 维护了一个  Volatile int state 和 FIFO 等待队列，多线程争用资源被阻塞的时候会进入这个队列。共享变量state 使用 cas 方式变更；
+>
+> AQS 定义了两种资源共享方式:
+>
+> - Exclusive：独占，只有一个线程能执行， 如 ReentrantLock
+> - Share：共享，多个线程可以同时执行，如 Semaphore、CountDownLatch、ReadWriteLock，CyclicBarrier
+>
+> 源码：
+>
+> - acquire() 方法  ： 以排它的方式获取锁，忽略中断
+>
+>   > 1. 尝试直接获取 
+>   > 2. 如果获取不到，将当前线程构造成节点 Node 并加入 sync 队列 ；
+>   > 3. 再次尝试获取，如果没有获取到，则 park 阻塞，并进入自旋 ；直到获取到后，进行 interrupt
+>
+> - release() 方法：以排它的方式释放锁
+>
+>   > 1. 尝试释放
+>   > 2. 如果释放成功，唤醒当前节点的 next 节点锁包含的线程；如果nex 为空，则从 tail 向前开始循环，直到 其前置节点不为空时所在的节点。使用 unpark 唤醒
+>
+> - acquireInterruptibly() 方法
+>
+>   > 1. 以排它模式获取锁，如果被中断则 中止；和acquire不同的地方在于它能够在外界对当前线程进行中断的时候提前结束获取状态的操作，换句话说，就是在类似synchronized获取锁时，外界能够对当前线程进行中断，并且获取锁的这个操作能够响应中断并提前返回
+>
+> - acquireShared：以共享模式获取状态
+>
+>   > 1. 尝试获取共享状态，调用 tryAcquiredShared 来获取共享状态，方法是非阻塞的
+>   > 2. 获取失败进入 sync 队列；获取失败后，当前时刻有可能是独占锁被其他线程锁把持，那么把当前线程构造成节点（共享模式）加入到 sync 队列
+>   > 3. 循环内判断退出队列条件：如果当前节点的前驱节点是头结点并且获取共享状态成功，这里和独占锁acquire的退出队列条件类似。
+>   > 4. 获取共享状态成功：在退出队列的条件上，和独占锁之间的主要区别在于获取共享状态成功之后的行为，而如果共享状态获取成功之后会判断后继节点是否是共享模式，如果是共享模式，那么就直接对其进行唤醒操作，也就是同时激发多个线程并发的运行。
+>   > 5. 获取共享状态失败：通过使用LockSupport将当前线程从线程调度器上摘下，进入休眠状态。
+>   
+> - releaseShared：调用该方法释放共享状态
+>
+
+应用
+
+### 闭锁 和 栅栏 信号量
+
+#### 闭锁(Latch) CountDownLatch
+
+> 构造时指定 count, 主线程 调用 await() 方法 , 其他子线程执行完毕后 调用 countDown() 方法使 count -1  ， 当 count 为 0 时  从 await() 方法开始放行执行
+
+#### 栅栏 
+
+> 构造函数：
+>
+> - 指定 线程数 
+> - 指定 线程个数满足后执行的 线程任务 Runnable
+>
+> 子线程中 调用 CyclicBarrier 的 await() 方法 ， 当线程数量达到 指定的线程数后， 才会放行继续执行， 并且可以放置多个  await() 方法 。
+
+**区别**
+
+- CountDownLatch 是一次性的，CyclicBarrier 是可循环利用的
+- 实现方式 ， CountDownLatch 使用 AQS 实现， CyclicBarrier  使用 ReentrantLock 实现
+
+#### 信号量 Semaphore
+
+> Semaphore 与 CountDownLatch 相似，不同的地方在于Semaphore 的值被获取到后是可以释放的，多被用来控制流量
+>
+> 构造函数： 
+>
+> - 初始化许可数量
+> - 是否是公平队列：即是否先进先出，默认非公平
+>
+> semaphore.acquire(2)   ：从 信号量获取给定数量的许可证，默认1， 一直阻塞，除非获取到了指定许可
+>
+> semaphore.release(2)：释放给定数量的许可证，默认1，将它们返回给信号量。
+>
+> 当信号量许可为0 时，如果此时不释放，但是仍然在获取许可，将会永久阻塞。
 
 
 
