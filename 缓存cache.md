@@ -66,11 +66,82 @@ redis 内置了  副本、 Lua 脚本、 LRU 淘汰策略、事务、不同级�
 
 ### 基本数据类型
 
+一个 Redis 节点包含多个 database，而一个 database 维护了从 key object 到 object space 的映射关系，这个映射关系是用一个 dict 来维护的，dict 是一个基于哈希表的算法，使用拉链法解决冲突，增量式重哈希。这个映射关系的 key 是string 类型，实现是 sds，而 value 可以是多种数据类型，比如 string、list、hash 等，通过通用的数据结构 **robj**（redisobject）来表示。robj 包含 5个字段
+
+- type：对象的数据类型，有5种  OBJ_STRING，OBJ_LIST，OBJ_SET，OBJ_ZSET，OBJ_HASH
+- encoding：对象内部表示方式（编码）,有10种：OBJ_ENCODING_RAW、INT、HT（hash table，dict实现）、ZIPMAP（不再使用）、LINKEDLIST（不再使用）、ZIPLIST、INTSET、SKIPLIST、EMBSTR、QUICKLIST
+- lru：做 LRU 算法用
+- refcount：引用计数
+- ptr：数据指针
+
 > - String 
-> - Hash：value 为 hashmap ,常用于 用户缓存，方便操作
-> - List
-> - Set
-> - Sorted set
+>
+> 内部结构：根据 encoding 不同，有3种结构：OBJ_ENCODING_INT（表示成数字，实际转为long 型）、或者 OBJ_ENCODING_EMBSTR（特殊的嵌入式的 SDS）、或者OBJ_ENCODING_RAW 原生方式（即Simple Dynamic String（SDS））
+>
+> 特点：可动态扩展内存；二进制安全；与传统的C语言字符串类型兼容
+>
+> - list
+>
+> 内部结构：**ziplist 或者 quicklist**
+>
+> ziplist 是一个经过特殊编码的双向链表，使用连续的内存空间；3.2 之前
+>
+> quicklist ：ziplist 的双向链表；3.2+
+>
+> 应用：消息队列；
+>
+> - Set	
+>
+> 内部结构：**hash table 或者  intset**:存储 int 而且元素较少时使用
+>
+> String 类型的无序集合。集合的成员是唯一的
+>
+> 应用：求交集、并集等
+>
+> - Sorted set（zset）
+>
+> 内部结构：**hash table 、ziplist 或者 skiplist**
+>
+> String 类型的有序集合，每个元素都会关联一个double类型的分数score。redis正是通过分数来为集合中的成员进行从小到大的排序。有序集合的成员是唯一的,但分数(score)却可以重复
+>
+> 应用：排名，分数排名
+>
+> **问题**：score 相同，如何排序
+>
+> 如果 A 和 B 是两个拥有不同分数的元素，那么如果 A 的分数 大于 B 的分数 则 A 大于 B；
+>
+> 如果 A 和 B 的分数相同，那么 如果 A 字符串 在 字典上 大于 B 字符串 则 A 大于 B；
+>
+> 解决方案：
+>
+>    分数 score 存入的时候是  double 类型，选择将时间戳放在小数点后
+>
+> - Hash：value 为 hashmap ,常用于 用户缓存，方便修改
+>
+> 内部结构：**ziplist  或者 hashtable**
+>
+> 存储  【对象id  属性 值 】
+>
+> hset user:001 name bob
+>
+> hget user:001 name
+
+![](images/redis/redis-data-type.jpg)
+
+### Redis 事务
+
+Redis 事务相关命令：
+
+- multi：开启事务
+- exec：执行事务中的所有命令
+- discard：取消事务，放弃执行事务中的所有命令
+- watch：监视一个或多个 key，如果事务在执行前，这个 key（或者多个key）被其他命令修改，则事务被中断，不会执行事务中的任何命令。
+- unwatch：取消 watch 对所有 key 的监视
+
+事务处理：
+
+- 编译器错误（语法错误）：语句加入队列时就报错，最终执行事务后，会报错，会全部回滚；
+- 运行时错误（Redis 类型错误）：加入队列时正常，执行时某个语句报错，其他语句正常返回ok；不会回滚，
 
 ### 集群模式
 

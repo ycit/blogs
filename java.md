@@ -51,51 +51,77 @@ volatile 可以保证原子性，以及禁止指令的重排序；
 
 另外 JMM 内部还定义了一套 happens-before 原则来保证多线程环境下两个操作间的可见性、有序性。
 
+#### 伪共享
+
+由于 CPU 执行速度很快， 而 内存执行速度很慢，为了提高 CPU 的读写速度，提高系统工作速度，在内存和CPU之间增加了高速缓存(cache)，一般是集成到 CPU 中，也叫 CPU cache，用于协调 CPU 与内存之间的速度差异。通常情况下，当一个 CPU 需要读取主存时，会将主存的部分数据读取到 CPU 高速缓存中	，甚至读取到 CPU 的内部寄存器中。 当 CPU 需要将结果写回到主内存时，会将内部寄存器的值刷新到高速缓存中，然后刷新到主内存。
+
+Cache 内部是按行存储的，其中每一行称为一个 缓存行（Cache line），Cache 行是 Cache 与主内存进行数据交换的单位，Cache 行的大小一般为2 的幂次数字节，一般为32-256个字节，最常见的是 64个字节。
+
+当CPU访问某一个变量时，首先会看 CPU Cache 内是否有该变量，如果有则直接从中获取，否则就去主内存里面获取变量，然后把该变量所在的内存区域的一个 Cache 行大小的内存拷贝到 Cache。当多线程修改互相独立的变量时，如果这些变量共享同一个缓存行，就会无意中影响彼此的性能，这就是伪共享。
+
+![](线程/cache-line.png)
+
+在核心1上运行的线程想更新变量 X，同时核心2上运行的线程想更新变量 Y。不幸的是，这两个变量在同一个缓存行中，每个线程都要去竞争缓存行的所有权来更新变量。如果核心1获得了所有权，缓存子系统将会使核心2中对应的缓存行失效。当核心2获得了所有权然后执行更新操作，核心1就要使自己对应的缓存失效。这会来来回回的经过 L3 缓存，大大影响了性能。
+
+解决
+
+1. 手动填充
+
+2. 使用 注解 @sun.misc.Contended ， 并在启动时添加参数  -XX:-RestrictContended
+
 ### IO
 
 - BIO：同步阻塞 IO
 
   面向流，socket 的 accept 、read、write 等都是同步阻塞的，如果需要同时处理多个客户端，就需要开启多个线程
 
-- NIO：同步非阻塞 IO
+### NIO
 
-  支持面向缓冲的、基于通道的 IO 操作方法。
+NIO：同步非阻塞 IO
 
-  核心api：channel、Buffer、Selector
+支持面向缓冲的、基于通道的 IO 操作方法。数据总是从通道读取到缓冲区中，或者从缓冲区写入到通道中。
 
-  > - channel
-  >
-  > FileChannel：从文件中读取数据
-  >
-  > DatagramChannel：从UDP网络中读取或者写入数据
-  >
-  > SocketChannel：从TCP网络中读取或者写入数据
-  >
-  > ServerSocketChannel：允许你监听来自TCP的连接，就像服务器一样。每一个连接都会有一个SocketChannel产生。
-  >
-  > - buffer
-  >
-  > ByteBuffer：字节缓冲区
-  >
-  > CharBuffer：字符缓冲区
-  >
-  > ShortBuffer：
-  >
-  > IntBuffer
-  >
-  > LongBuffer：
-  >
-  > FloatBuffer：
-  >
-  > DoubleBuffer
-  >
-  > - selector
-  >
-  > 多路复用的 selector,selector选择器可以监听多个Channel通道感兴趣的事情(read、write、accept(服务端接收)、connect，实现一个线程管理多个Channel，节省线程切换上下文的资源消耗。Selector只能管理非阻塞的通道，FileChannel是阻塞的，无法管理。
-  >
-  > 代表框架：
-  >
-  > netty
+核心api：Channel、Buffer、Selector
+
+#### Channel
+
+- FileChannel：从文件中读取数据
+- DataGramChannel：从UDP网络中读取或者写入数据
+- SocketChannel：从TCP网络中读取或者写入数据
+- ServerSocketChannel：允许你监听来自TCP的连接，就像服务器一样。每一个连接都会有一个SocketChannel产生。
+
+#### Buffer
+
+Java NIO 中的 Buffer 用于 和 NIO 通道进行交互。数据是从通道读入缓冲区，从缓冲区写入到通道中。
+
+使用Buffer 读写数据一般遵循以下步骤
+
+1. 写入数据到 Buffer
+2. 调用 flip() 方法
+3. 从 Buffer 中读取数据
+4. 调用 clear() 方法 或者 compact() 方法
+
+ByteBuffer：字节缓冲区
+
+CharBuffer：字符缓冲区
+
+ShortBuffer：
+
+IntBuffer
+
+LongBuffer：
+
+FloatBuffer：
+
+DoubleBuffer
+
+#### Selector
+
+多路复用的 selector,selector选择器可以监听多个Channel通道感兴趣的事情(read、write、accept(服务端接收)、connect，实现一个线程管理多个Channel，节省线程切换上下文的资源消耗。Selector只能管理非阻塞的通道，FileChannel是阻塞的，无法管理。
+
+
+
+零拷贝
 
 | I/O方式             | 系统调用   | CPU拷贝次数 | DMA拷贝次数 | 上下文切换次数 |
 | ------------------- | ---------- | ----------- | ----------- | -------------- |
@@ -107,6 +133,4 @@ volatile 可以保证原子性，以及禁止指令的重排序；
 | tee                 | tee        | 0           | 2           | 2              |
 
 DMA：direct memory acess，直接存储器访问
-
-### 
 
